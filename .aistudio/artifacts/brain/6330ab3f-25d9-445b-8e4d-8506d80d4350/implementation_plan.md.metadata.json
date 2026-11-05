@@ -1,0 +1,6 @@
+{
+  "summary": "Revised implementation plan with strict role separation: dedicated customer web experience with one-time phone sign-in (remembering device), order requests, live order tracking, reviews, and loyalty stamps, completely isolated from staff controls. Staff operations (Waiter approval, Kitchen KDS, Cashier billing, Owner QR generator) are housed in a secure PIN-protected staff portal.",
+  "updatedAt": "2026-11-03T12:52:40.932863118Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

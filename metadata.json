@@ -1,0 +1,6 @@
+{
+  "name": "QR Dine: Table Ordering & Loyalty",
+  "description": "Production-grade QR dining and restaurant operations platform with waiter verification gate, kitchen display system, counter billing, and customer digital stamps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
