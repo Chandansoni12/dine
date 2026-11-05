@@ -43,10 +43,15 @@ let memoryLoyaltyAccounts: Record<string, CustomerLoyalty> = {
 };
 
 export async function initDatabase(): Promise<boolean> {
-  const databaseUrl = process.env.DATABASE_URL;
+  let databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.log('ℹ️ DATABASE_URL not set. Running with resilient in-memory storage.');
     return false;
+  }
+
+  // Sanitize connection string: node-postgres does not support channel_binding query param
+  if (databaseUrl.includes('channel_binding=')) {
+    databaseUrl = databaseUrl.replace(/([?&])channel_binding=[^&]*(&|$)/, '$1').replace(/[?&]$/, '');
   }
 
   try {
