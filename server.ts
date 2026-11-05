@@ -45,6 +45,19 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json());
 
+// Standard Security Headers
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// Health check endpoint for cloud hosting platforms (Render / Cloud Run)
+app.get(['/healthz', '/api/health'], (_req: Request, res: Response) => {
+  res.status(200).json({ status: 'healthy', uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
+
 // ==========================================
 // Security & Session Store
 // ==========================================
@@ -643,15 +656,19 @@ app.get('/api/config', (_req: Request, res: Response) => {
   const localIp = getLocalNetworkIp();
   const localNetworkUrl = `http://${localIp}:${PORT}`;
   const cloudflareTunnelUrl = 'https://modify-purchases-verse-edward.trycloudflare.com';
+  const renderExternalUrl = process.env.RENDER_EXTERNAL_URL || '';
   const envUrl = process.env.APP_URL || '';
+
+  const activeSharedUrl = envUrl || renderExternalUrl || cloudflareTunnelUrl || localNetworkUrl;
 
   res.json({
     localIp,
     localNetworkUrl,
     cloudflareTunnelUrl,
-    sharedAppUrl: envUrl || cloudflareTunnelUrl || localNetworkUrl, // default to Cloudflare tunnel for guaranteed mobile access
+    renderExternalUrl,
+    sharedAppUrl: activeSharedUrl, // automatically uses Render's public URL when deployed!
     devAppUrl: `http://localhost:${PORT}`,
-    appUrl: envUrl || cloudflareTunnelUrl || localNetworkUrl,
+    appUrl: activeSharedUrl,
     cloudRunUrl: 'https://ais-pre-zirct7v3nllzqjddom3tte-11779746428.asia-southeast1.run.app',
     googlePlaceReviewUrl: 'https://search.google.com/local/writereview?placeid=ChIJrTLr-GyuEmsRBfy61i59si0',
   });

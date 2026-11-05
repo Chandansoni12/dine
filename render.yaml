@@ -5,6 +5,7 @@ services:
     plan: free
     buildCommand: npm install --legacy-peer-deps && npm run build
     startCommand: npm start
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production
@@ -12,3 +13,4 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+

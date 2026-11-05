@@ -201,25 +201,45 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     let isMounted = true;
 
-    // Fetch initial snapshot from server
-    fetch('/api/bootstrap')
-      .then(res => res.json())
-      .then(data => {
-        if (!isMounted) return;
-        if (data.orders) setOrders(data.orders);
-        if (data.menuItems) setMenuItems(data.menuItems);
-        if (data.serviceRequests) setServiceRequests(data.serviceRequests);
-        if (data.loyaltyAccounts) setLoyaltyAccounts(data.loyaltyAccounts);
-      })
-      .catch(err => {
-        console.warn('Bootstrap fetch fallback to defaults:', err);
-      });
+    // Fetch initial snapshot from server with automatic retry for cloud cold-starts
+    const fetchBootstrapState = () => {
+      fetch('/api/bootstrap')
+        .then(res => res.json())
+        .then(data => {
+          if (!isMounted) return;
+          if (data.orders) setOrders(data.orders);
+          if (data.menuItems) setMenuItems(data.menuItems);
+          if (data.serviceRequests) setServiceRequests(data.serviceRequests);
+          if (data.loyaltyAccounts) setLoyaltyAccounts(data.loyaltyAccounts);
+        })
+        .catch(err => {
+          console.warn('Bootstrap fetch retry (server might be waking up):', err);
+          if (isMounted) {
+            setTimeout(fetchBootstrapState, 3500);
+          }
+        });
+    };
+
+    fetchBootstrapState();
 
     // Connect to Server-Sent Events (SSE) for multi-device real-time sync
     const eventSource = new EventSource('/api/events');
 
     eventSource.onopen = () => {
-      if (isMounted) setIsRealTimeConnected(true);
+      if (isMounted) {
+        setIsRealTimeConnected(true);
+        // Refresh state on connection to ensure no events were missed during sleep/reconnect
+        fetch('/api/bootstrap')
+          .then(res => res.json())
+          .then(data => {
+            if (!isMounted) return;
+            if (data.orders) setOrders(data.orders);
+            if (data.menuItems) setMenuItems(data.menuItems);
+            if (data.serviceRequests) setServiceRequests(data.serviceRequests);
+            if (data.loyaltyAccounts) setLoyaltyAccounts(data.loyaltyAccounts);
+          })
+          .catch(() => {});
+      }
     };
 
     eventSource.onerror = () => {
