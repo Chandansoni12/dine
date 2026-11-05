@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import os from 'os';
 import crypto from 'crypto';
@@ -20,8 +21,24 @@ import {
   STAFF_USERS,
   RESTAURANT_INFO,
 } from './src/data/seedData';
+import {
+  initDatabase,
+  dbGetOrders,
+  dbSaveOrder,
+  dbGetMenuItems,
+  dbToggleMenuItemAvailability,
+  dbGetLoyaltyAccounts,
+  dbSaveLoyaltyAccount,
+  dbGetServiceRequests,
+  dbSaveServiceRequest,
+  dbResolveServiceRequest,
+  dbResetDemo,
+} from './src/db/database';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -180,12 +197,17 @@ app.get('/api/events', (req: Request, res: Response) => {
 // ==========================================
 // REST API: Bootstrap State for all Terminals
 // ==========================================
-app.get('/api/bootstrap', (_req: Request, res: Response) => {
+app.get('/api/bootstrap', async (_req: Request, res: Response) => {
+  const orders = await dbGetOrders();
+  const menuItems = await dbGetMenuItems();
+  const serviceRequests = await dbGetServiceRequests();
+  const loyaltyAccounts = await dbGetLoyaltyAccounts();
+
   res.json({
-    orders: serverOrders,
-    menuItems: serverMenuItems,
-    serviceRequests: serverServiceRequests,
-    loyaltyAccounts: serverLoyaltyAccounts,
+    orders,
+    menuItems,
+    serviceRequests,
+    loyaltyAccounts,
     restaurantInfo: RESTAURANT_INFO,
   });
 });
@@ -193,7 +215,7 @@ app.get('/api/bootstrap', (_req: Request, res: Response) => {
 // ==========================================
 // REST API: Order Management (Hardened & Authoritative)
 // ==========================================
-app.post('/api/orders', (req: Request, res: Response) => {
+app.post('/api/orders', async (req: Request, res: Response) => {
   const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
   if (isSpammingOrders(clientIp)) {
     return res.status(429).json({ error: 'Order submission rate limit exceeded. Please wait a moment.' });
@@ -205,12 +227,15 @@ app.post('/api/orders', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Missing required order details' });
   }
 
+  const currentMenuItems = await dbGetMenuItems();
+  const currentOrders = await dbGetOrders();
+
   // 1. Authoritative Server-Side Pricing & 86 Stock Verification
   let calculatedSubtotalPaise = 0;
   const validatedItems: OrderItem[] = [];
 
   for (const rawItem of items) {
-    const menuItem = serverMenuItems.find(m => m.id === rawItem.itemId);
+    const menuItem = currentMenuItems.find(m => m.id === rawItem.itemId);
     if (!menuItem) {
       return res.status(400).json({ error: `Dish not found on menu: ${rawItem.name || rawItem.itemId}` });
     }
@@ -262,7 +287,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
   const taxPaise = Math.round(calculatedSubtotalPaise * RESTAURANT_INFO.gstRate);
   const totalPaise = calculatedSubtotalPaise + taxPaise;
 
-  const orderNumber = `R${1040 + serverOrders.length + 1}`;
+  const orderNumber = `R${1040 + currentOrders.length + 1}`;
   const cleanTable = sanitizeText(String(tableNumber), 4).padStart(2, '0');
   const cleanPhone = sanitizeText(String(customerPhone || '+91 98201 12345'), 18);
   const cleanName = sanitizeText(String(customerName || 'Guest Diner'), 40);
@@ -288,24 +313,26 @@ app.post('/api/orders', (req: Request, res: Response) => {
     stampAwarded: false,
   };
 
-  serverOrders = [newOrder, ...serverOrders];
-  broadcastSse('orders_updated', { orders: serverOrders, newOrder });
+  await dbSaveOrder(newOrder);
+  const updatedOrders = await dbGetOrders();
+  broadcastSse('orders_updated', { orders: updatedOrders, newOrder });
 
   return res.status(201).json(newOrder);
 });
 
 // Waiter confirms order (Requires Waiter or Manager Auth)
-app.patch('/api/orders/:id/confirm', requireStaffAuth(['waiter', 'manager']), (req: Request, res: Response) => {
+app.patch('/api/orders/:id/confirm', requireStaffAuth(['waiter', 'manager']), async (req: Request, res: Response) => {
   const { id } = req.params;
   const staff = (req as any).staff;
   const staffId = staff?.staffId || req.body.staffId || 'ST-W01';
   const staffName = staff?.name || req.body.staffName || 'Floor Waiter';
 
-  const index = serverOrders.findIndex(o => o.id === id);
+  const orders = await dbGetOrders();
+  const index = orders.findIndex(o => o.id === id);
   if (index === -1) return res.status(404).json({ error: 'Order not found' });
 
-  serverOrders[index] = {
-    ...serverOrders[index],
+  const updatedOrder: RestaurantOrder = {
+    ...orders[index],
     orderStatus: 'CONFIRMED',
     waiterAction: {
       staffId,
@@ -314,23 +341,26 @@ app.patch('/api/orders/:id/confirm', requireStaffAuth(['waiter', 'manager']), (r
     },
   };
 
-  broadcastSse('orders_updated', { orders: serverOrders, updatedOrder: serverOrders[index] });
-  return res.json(serverOrders[index]);
+  await dbSaveOrder(updatedOrder);
+  const updatedOrders = await dbGetOrders();
+  broadcastSse('orders_updated', { orders: updatedOrders, updatedOrder });
+  return res.json(updatedOrder);
 });
 
 // Waiter rejects order
-app.patch('/api/orders/:id/reject', requireStaffAuth(['waiter', 'manager']), (req: Request, res: Response) => {
+app.patch('/api/orders/:id/reject', requireStaffAuth(['waiter', 'manager']), async (req: Request, res: Response) => {
   const { id } = req.params;
   const staff = (req as any).staff;
   const staffId = staff?.staffId || req.body.staffId || 'ST-W01';
   const staffName = staff?.name || req.body.staffName || 'Floor Waiter';
   const reason = sanitizeText(req.body.reason || 'Floor verification failed', 150);
 
-  const index = serverOrders.findIndex(o => o.id === id);
+  const orders = await dbGetOrders();
+  const index = orders.findIndex(o => o.id === id);
   if (index === -1) return res.status(404).json({ error: 'Order not found' });
 
-  serverOrders[index] = {
-    ...serverOrders[index],
+  const updatedOrder: RestaurantOrder = {
+    ...orders[index],
     orderStatus: 'REJECTED',
     waiterAction: {
       staffId,
@@ -340,78 +370,90 @@ app.patch('/api/orders/:id/reject', requireStaffAuth(['waiter', 'manager']), (re
     },
   };
 
-  broadcastSse('orders_updated', { orders: serverOrders, updatedOrder: serverOrders[index] });
-  return res.json(serverOrders[index]);
+  await dbSaveOrder(updatedOrder);
+  const updatedOrders = await dbGetOrders();
+  broadcastSse('orders_updated', { orders: updatedOrders, updatedOrder });
+  return res.json(updatedOrder);
 });
 
 // Kitchen starts cooking
-app.patch('/api/orders/:id/prep', requireStaffAuth(['kitchen', 'manager']), (req: Request, res: Response) => {
+app.patch('/api/orders/:id/prep', requireStaffAuth(['kitchen', 'manager']), async (req: Request, res: Response) => {
   const { id } = req.params;
-  const index = serverOrders.findIndex(o => o.id === id);
+  const orders = await dbGetOrders();
+  const index = orders.findIndex(o => o.id === id);
   if (index === -1) return res.status(404).json({ error: 'Order not found' });
 
-  serverOrders[index] = {
-    ...serverOrders[index],
+  const updatedOrder: RestaurantOrder = {
+    ...orders[index],
     orderStatus: 'PREPARING',
     kitchenAction: {
-      ...serverOrders[index].kitchenAction,
+      ...orders[index].kitchenAction,
       startedAt: new Date().toISOString(),
     },
   };
 
-  broadcastSse('orders_updated', { orders: serverOrders, updatedOrder: serverOrders[index] });
-  return res.json(serverOrders[index]);
+  await dbSaveOrder(updatedOrder);
+  const updatedOrders = await dbGetOrders();
+  broadcastSse('orders_updated', { orders: updatedOrders, updatedOrder });
+  return res.json(updatedOrder);
 });
 
 // Kitchen marks ready on pass
-app.patch('/api/orders/:id/ready', requireStaffAuth(['kitchen', 'manager']), (req: Request, res: Response) => {
+app.patch('/api/orders/:id/ready', requireStaffAuth(['kitchen', 'manager']), async (req: Request, res: Response) => {
   const { id } = req.params;
-  const index = serverOrders.findIndex(o => o.id === id);
+  const orders = await dbGetOrders();
+  const index = orders.findIndex(o => o.id === id);
   if (index === -1) return res.status(404).json({ error: 'Order not found' });
 
-  serverOrders[index] = {
-    ...serverOrders[index],
+  const updatedOrder: RestaurantOrder = {
+    ...orders[index],
     orderStatus: 'READY',
     kitchenAction: {
-      ...serverOrders[index].kitchenAction,
+      ...orders[index].kitchenAction,
       readyAt: new Date().toISOString(),
     },
   };
 
-  broadcastSse('orders_updated', { orders: serverOrders, updatedOrder: serverOrders[index] });
-  return res.json(serverOrders[index]);
+  await dbSaveOrder(updatedOrder);
+  const updatedOrders = await dbGetOrders();
+  broadcastSse('orders_updated', { orders: updatedOrders, updatedOrder });
+  return res.json(updatedOrder);
 });
 
 // Staff marks served to table
-app.patch('/api/orders/:id/serve', requireStaffAuth(['waiter', 'kitchen', 'manager']), (req: Request, res: Response) => {
+app.patch('/api/orders/:id/serve', requireStaffAuth(['waiter', 'kitchen', 'manager']), async (req: Request, res: Response) => {
   const { id } = req.params;
-  const index = serverOrders.findIndex(o => o.id === id);
+  const orders = await dbGetOrders();
+  const index = orders.findIndex(o => o.id === id);
   if (index === -1) return res.status(404).json({ error: 'Order not found' });
 
-  serverOrders[index] = {
-    ...serverOrders[index],
+  const updatedOrder: RestaurantOrder = {
+    ...orders[index],
     orderStatus: 'SERVED',
   };
 
-  broadcastSse('orders_updated', { orders: serverOrders, updatedOrder: serverOrders[index] });
-  return res.json(serverOrders[index]);
+  await dbSaveOrder(updatedOrder);
+  const updatedOrders = await dbGetOrders();
+  broadcastSse('orders_updated', { orders: updatedOrders, updatedOrder });
+  return res.json(updatedOrder);
 });
 
 // Cashier records settlement & awards loyalty
-app.post('/api/orders/:id/pay', requireStaffAuth(['cashier', 'manager']), (req: Request, res: Response) => {
+app.post('/api/orders/:id/pay', requireStaffAuth(['cashier', 'manager']), async (req: Request, res: Response) => {
   const { id } = req.params;
   const staff = (req as any).staff;
   const { method } = req.body;
   const cashierId = staff?.staffId || req.body.cashierId || 'ST-C01';
   const cashierName = staff?.name || req.body.cashierName || 'Cashier Desk';
 
-  const index = serverOrders.findIndex(o => o.id === id);
+  const orders = await dbGetOrders();
+  const index = orders.findIndex(o => o.id === id);
   if (index === -1) return res.status(404).json({ error: 'Order not found' });
 
-  const order = serverOrders[index];
+  const order = orders[index];
   const isEligibleForStamp = order.totalPaise >= RESTAURANT_INFO.stampMinSpendPaise && !order.stampAwarded;
 
-  serverOrders[index] = {
+  const updatedOrder: RestaurantOrder = {
     ...order,
     paymentStatus: 'PAID',
     paymentMethod: method as PaymentMethod,
@@ -424,9 +466,13 @@ app.post('/api/orders/:id/pay', requireStaffAuth(['cashier', 'manager']), (req: 
     stampAwarded: isEligibleForStamp ? true : order.stampAwarded,
   };
 
+  await dbSaveOrder(updatedOrder);
+
   // Award stamp to loyalty ledger
+  let loyaltyResult = null;
   if (isEligibleForStamp && order.customerPhone) {
-    const existing = serverLoyaltyAccounts[order.customerPhone] || {
+    const accounts = await dbGetLoyaltyAccounts();
+    const existing = accounts[order.customerPhone] || {
       phone: order.customerPhone,
       stampsCount: 0,
       threshold: RESTAURANT_INFO.stampTarget,
@@ -434,7 +480,7 @@ app.post('/api/orders/:id/pay', requireStaffAuth(['cashier', 'manager']), (req: 
       history: [],
     };
 
-    serverLoyaltyAccounts[order.customerPhone] = {
+    const updatedAccount: CustomerLoyalty = {
       ...existing,
       stampsCount: existing.stampsCount + 1,
       history: [
@@ -447,24 +493,30 @@ app.post('/api/orders/:id/pay', requireStaffAuth(['cashier', 'manager']), (req: 
         ...existing.history,
       ],
     };
-    broadcastSse('loyalty_updated', { accounts: serverLoyaltyAccounts });
+
+    await dbSaveLoyaltyAccount(updatedAccount);
+    loyaltyResult = updatedAccount;
+    const allAccounts = await dbGetLoyaltyAccounts();
+    broadcastSse('loyalty_updated', { accounts: allAccounts });
   }
 
-  broadcastSse('orders_updated', { orders: serverOrders, updatedOrder: serverOrders[index] });
-  return res.json({ order: serverOrders[index], loyalty: serverLoyaltyAccounts[order.customerPhone] });
+  const allOrders = await dbGetOrders();
+  broadcastSse('orders_updated', { orders: allOrders, updatedOrder });
+  return res.json({ order: updatedOrder, loyalty: loyaltyResult });
 });
 
 // Customer review submission (Sanitized)
-app.post('/api/orders/:id/review', (req: Request, res: Response) => {
+app.post('/api/orders/:id/review', async (req: Request, res: Response) => {
   const { id } = req.params;
   const rating = Math.max(1, Math.min(5, Math.floor(Number(req.body.rating) || 5)));
   const comment = sanitizeText(req.body.comment || '', 500);
 
-  const index = serverOrders.findIndex(o => o.id === id);
+  const orders = await dbGetOrders();
+  const index = orders.findIndex(o => o.id === id);
   if (index === -1) return res.status(404).json({ error: 'Order not found' });
 
-  serverOrders[index] = {
-    ...serverOrders[index],
+  const updatedOrder: RestaurantOrder = {
+    ...orders[index],
     review: {
       rating,
       comment,
@@ -472,12 +524,14 @@ app.post('/api/orders/:id/review', (req: Request, res: Response) => {
     },
   };
 
-  broadcastSse('orders_updated', { orders: serverOrders, updatedOrder: serverOrders[index] });
-  return res.json(serverOrders[index]);
+  await dbSaveOrder(updatedOrder);
+  const allOrders = await dbGetOrders();
+  broadcastSse('orders_updated', { orders: allOrders, updatedOrder });
+  return res.json(updatedOrder);
 });
 
 // Customer service requests
-app.post('/api/service-calls', (req: Request, res: Response) => {
+app.post('/api/service-calls', async (req: Request, res: Response) => {
   const { tableNumber, type } = req.body;
   if (!tableNumber || !type) return res.status(400).json({ error: 'Missing parameters' });
 
@@ -492,29 +546,31 @@ app.post('/api/service-calls', (req: Request, res: Response) => {
     status: 'pending',
   };
 
-  serverServiceRequests = [newCall, ...serverServiceRequests];
-  broadcastSse('service_requested', { serviceRequests: serverServiceRequests, newCall });
+  await dbSaveServiceRequest(newCall);
+  const allCalls = await dbGetServiceRequests();
+  broadcastSse('service_requested', { serviceRequests: allCalls, newCall });
   return res.status(201).json(newCall);
 });
 
-app.patch('/api/service-calls/:id/resolve', requireStaffAuth(['waiter', 'manager']), (req: Request, res: Response) => {
+app.patch('/api/service-calls/:id/resolve', requireStaffAuth(['waiter', 'manager']), async (req: Request, res: Response) => {
   const { id } = req.params;
-  serverServiceRequests = serverServiceRequests.map(sc => (sc.id === id ? { ...sc, status: 'resolved' } : sc));
-  broadcastSse('service_requested', { serviceRequests: serverServiceRequests });
-  return res.json({ success: true, serviceRequests: serverServiceRequests });
+  await dbResolveServiceRequest(id);
+  const allCalls = await dbGetServiceRequests();
+  broadcastSse('service_requested', { serviceRequests: allCalls });
+  return res.json({ success: true, serviceRequests: allCalls });
 });
 
 // Menu Stock-out (86) Toggle
-app.patch('/api/menu/:id/availability', requireStaffAuth(['manager', 'kitchen']), (req: Request, res: Response) => {
+app.patch('/api/menu/:id/availability', requireStaffAuth(['manager', 'kitchen']), async (req: Request, res: Response) => {
   const { id } = req.params;
   const { isAvailable } = req.body;
 
-  const item = serverMenuItems.find(m => m.id === id);
-  if (!item) return res.status(404).json({ error: 'Item not found' });
+  const updatedItem = await dbToggleMenuItemAvailability(id, Boolean(isAvailable));
+  if (!updatedItem) return res.status(404).json({ error: 'Item not found' });
 
-  item.isAvailable = Boolean(isAvailable);
-  broadcastSse('menu_updated', { menuItems: serverMenuItems, updatedItem: item });
-  return res.json(item);
+  const allItems = await dbGetMenuItems();
+  broadcastSse('menu_updated', { menuItems: allItems, updatedItem });
+  return res.json(updatedItem);
 });
 
 // Staff PIN Authentication (Generates Session Token)
@@ -541,13 +597,14 @@ app.post('/api/auth/staff-login', (req: Request, res: Response) => {
 });
 
 // Reset demo data
-app.post('/api/admin/reset-demo', requireStaffAuth(['manager']), (_req: Request, res: Response) => {
-  serverOrders = [...INITIAL_ORDERS];
-  serverMenuItems = [...INITIAL_MENU_ITEMS];
-  serverServiceRequests = [];
-  broadcastSse('orders_updated', { orders: serverOrders });
-  broadcastSse('menu_updated', { menuItems: serverMenuItems });
-  broadcastSse('service_requested', { serviceRequests: serverServiceRequests });
+app.post('/api/admin/reset-demo', requireStaffAuth(['manager']), async (_req: Request, res: Response) => {
+  await dbResetDemo();
+  const orders = await dbGetOrders();
+  const menuItems = await dbGetMenuItems();
+  const serviceRequests = await dbGetServiceRequests();
+  broadcastSse('orders_updated', { orders });
+  broadcastSse('menu_updated', { menuItems });
+  broadcastSse('service_requested', { serviceRequests });
   res.json({ success: true });
 });
 
@@ -702,6 +759,7 @@ Strict guidelines:
 });
 
 async function startServer() {
+  await initDatabase();
   const isDev = process.env.NODE_ENV !== 'production';
 
   if (isDev) {
