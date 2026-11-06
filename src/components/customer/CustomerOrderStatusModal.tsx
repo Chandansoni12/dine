@@ -73,7 +73,7 @@ export const CustomerOrderStatusModal: React.FC<CustomerOrderStatusModalProps> =
   const steps = [
     {
       title: 'Order Requested',
-      description: 'Submitted from table QR',
+      description: 'Dine-in Order Placed',
       isCompleted: true,
       isActive: orderStatus === 'WAITING_FOR_WAITER',
     },

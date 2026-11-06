@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { ShoppingBag, Award, Clock, Utensils, User, LogOut, QrCode, Star, Sparkles } from 'lucide-react';
+import { ShoppingBag, Award, Clock, Utensils, User, Star } from 'lucide-react';
 import { RESTAURANT_INFO } from '../../data/seedData';
 
 interface CustomerHeaderProps {
@@ -9,7 +9,6 @@ interface CustomerHeaderProps {
   onOpenOrderStatus: () => void;
   onOpenLogin: () => void;
   onOpenReview: () => void;
-  onOpenQrStandee: () => void;
 }
 
 export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
@@ -18,7 +17,6 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
   onOpenOrderStatus,
   onOpenLogin,
   onOpenReview,
-  onOpenQrStandee,
 }) => {
   const {
     currentTable,
@@ -64,18 +62,8 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
           </div>
         </div>
 
-        {/* Right: Actions (Table QR, Reviews, Active Order, Stamps, Cart, Profile) */}
+        {/* Right: Actions (Reviews, Active Order, Stamps, Cart, Profile) */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Table QR Standee button (to scan on physical phone) */}
-          <button
-            onClick={onOpenQrStandee}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-            title="Scan or View Table QR code to open on your phone"
-          >
-            <QrCode className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden md:inline">Table QR</span>
-          </button>
-
           {/* AI Review button */}
           <button
             onClick={onOpenReview}

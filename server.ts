@@ -26,6 +26,9 @@ import {
   dbGetOrders,
   dbSaveOrder,
   dbGetMenuItems,
+  dbAddMenuItem,
+  dbUpdateMenuItem,
+  dbDeleteMenuItem,
   dbToggleMenuItemAvailability,
   dbGetLoyaltyAccounts,
   dbSaveLoyaltyAccount,
@@ -33,6 +36,7 @@ import {
   dbSaveServiceRequest,
   dbResolveServiceRequest,
   dbResetDemo,
+  dbGetDiagnostics,
 } from './src/db/database';
 
 dotenv.config();
@@ -586,6 +590,72 @@ app.patch('/api/menu/:id/availability', requireStaffAuth(['manager', 'kitchen'])
   return res.json(updatedItem);
 });
 
+// Admin Add New Menu Item
+app.post('/api/menu', requireStaffAuth(['manager']), async (req: Request, res: Response) => {
+  const { name, category, description, pricePaise, isVeg, spicyLevel, image, portionOptions, addOns } = req.body;
+
+  if (!name || !category || typeof pricePaise !== 'number') {
+    return res.status(400).json({ error: 'Missing required dish details (name, category, price)' });
+  }
+
+  const categoryPrefix = String(category).slice(0, 3).toUpperCase();
+  const newItemId = `M-${categoryPrefix}-${Date.now().toString().slice(-4)}`;
+
+  const cleanItem: MenuItem = {
+    id: newItemId,
+    name: sanitizeText(name, 60),
+    category: ['starters', 'mains', 'breads', 'beverages', 'desserts'].includes(category) ? category : 'starters',
+    description: sanitizeText(description || '', 250),
+    pricePaise: Math.max(100, Math.floor(pricePaise)),
+    isVeg: Boolean(isVeg),
+    isAvailable: true,
+    spicyLevel: [0, 1, 2, 3].includes(spicyLevel) ? spicyLevel : 0,
+    image: image && typeof image === 'string' ? image.trim() : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80',
+    portionOptions: Array.isArray(portionOptions) ? portionOptions : [],
+    addOns: Array.isArray(addOns) ? addOns : [],
+  };
+
+  const savedItem = await dbAddMenuItem(cleanItem);
+  const allItems = await dbGetMenuItems();
+  broadcastSse('menu_updated', { menuItems: allItems, newItem: savedItem });
+  return res.status(201).json(savedItem);
+});
+
+// Admin Edit Menu Item
+app.put('/api/menu/:id', requireStaffAuth(['manager']), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updates: Partial<MenuItem> = {};
+
+  if (req.body.name) updates.name = sanitizeText(req.body.name, 60);
+  if (req.body.category) updates.category = req.body.category;
+  if (req.body.description !== undefined) updates.description = sanitizeText(req.body.description, 250);
+  if (typeof req.body.pricePaise === 'number') updates.pricePaise = Math.max(100, Math.floor(req.body.pricePaise));
+  if (typeof req.body.isVeg === 'boolean') updates.isVeg = req.body.isVeg;
+  if (typeof req.body.isAvailable === 'boolean') updates.isAvailable = req.body.isAvailable;
+  if (typeof req.body.spicyLevel === 'number') updates.spicyLevel = req.body.spicyLevel;
+  if (req.body.image) updates.image = req.body.image.trim();
+  if (Array.isArray(req.body.portionOptions)) updates.portionOptions = req.body.portionOptions;
+  if (Array.isArray(req.body.addOns)) updates.addOns = req.body.addOns;
+
+  const updatedItem = await dbUpdateMenuItem(id, updates);
+  if (!updatedItem) return res.status(404).json({ error: 'Item not found' });
+
+  const allItems = await dbGetMenuItems();
+  broadcastSse('menu_updated', { menuItems: allItems, updatedItem });
+  return res.json(updatedItem);
+});
+
+// Admin Delete Menu Item
+app.delete('/api/menu/:id', requireStaffAuth(['manager']), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const success = await dbDeleteMenuItem(id);
+  if (!success) return res.status(404).json({ error: 'Failed to delete item' });
+
+  const allItems = await dbGetMenuItems();
+  broadcastSse('menu_updated', { menuItems: allItems, deletedId: id });
+  return res.json({ success: true, deletedId: id });
+});
+
 // Staff PIN Authentication (Generates Session Token)
 app.post('/api/auth/staff-login', (req: Request, res: Response) => {
   const { pin, preferredRole } = req.body;
@@ -619,6 +689,16 @@ app.post('/api/admin/reset-demo', requireStaffAuth(['manager']), async (_req: Re
   broadcastSse('menu_updated', { menuItems });
   broadcastSse('service_requested', { serviceRequests });
   res.json({ success: true });
+});
+
+// Admin Neon Database Diagnostics & Live Inspector
+app.get('/api/admin/db-status', requireStaffAuth(['manager']), async (_req: Request, res: Response) => {
+  try {
+    const diagnostics = await dbGetDiagnostics();
+    res.json(diagnostics);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to inspect database status' });
+  }
 });
 
 // ==========================================
@@ -655,7 +735,7 @@ function getLocalNetworkIp(): string {
 app.get('/api/config', (_req: Request, res: Response) => {
   const localIp = getLocalNetworkIp();
   const localNetworkUrl = `http://${localIp}:${PORT}`;
-  const cloudflareTunnelUrl = 'https://modify-purchases-verse-edward.trycloudflare.com';
+  const cloudflareTunnelUrl = 'https://makeup-attacked-nam-reaching.trycloudflare.com';
   const renderExternalUrl = process.env.RENDER_EXTERNAL_URL || '';
   const envUrl = process.env.APP_URL || '';
 

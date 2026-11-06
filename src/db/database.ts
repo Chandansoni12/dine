@@ -298,6 +298,103 @@ export async function dbToggleMenuItemAvailability(id: string, isAvailable: bool
   return item || null;
 }
 
+export async function dbAddMenuItem(item: MenuItem): Promise<MenuItem> {
+  memoryMenuItems = [...memoryMenuItems, item];
+  if (pool && isConnected) {
+    try {
+      await pool.query(
+        `INSERT INTO menu_items (id, name, category, description, price_paise, is_veg, is_available, spicy_level, image, portion_options, add_ons)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           category = EXCLUDED.category,
+           description = EXCLUDED.description,
+           price_paise = EXCLUDED.price_paise,
+           is_veg = EXCLUDED.is_veg,
+           is_available = EXCLUDED.is_available,
+           spicy_level = EXCLUDED.spicy_level,
+           image = EXCLUDED.image,
+           portion_options = EXCLUDED.portion_options,
+           add_ons = EXCLUDED.add_ons`,
+        [
+          item.id,
+          item.name,
+          item.category,
+          item.description || '',
+          item.pricePaise,
+          item.isVeg,
+          item.isAvailable !== false,
+          item.spicyLevel || 0,
+          item.image || '',
+          JSON.stringify(item.portionOptions || []),
+          JSON.stringify(item.addOns || []),
+        ]
+      );
+    } catch (err) {
+      console.error('dbAddMenuItem error:', err);
+    }
+  }
+  return item;
+}
+
+export async function dbUpdateMenuItem(id: string, updates: Partial<MenuItem>): Promise<MenuItem | null> {
+  const idx = memoryMenuItems.findIndex(m => m.id === id);
+  if (idx !== -1) {
+    memoryMenuItems[idx] = { ...memoryMenuItems[idx], ...updates };
+  }
+  const current = memoryMenuItems.find(m => m.id === id);
+  if (!current) return null;
+
+  if (pool && isConnected) {
+    try {
+      await pool.query(
+        `UPDATE menu_items SET
+           name = COALESCE($1, name),
+           category = COALESCE($2, category),
+           description = COALESCE($3, description),
+           price_paise = COALESCE($4, price_paise),
+           is_veg = COALESCE($5, is_veg),
+           is_available = COALESCE($6, is_available),
+           spicy_level = COALESCE($7, spicy_level),
+           image = COALESCE($8, image),
+           portion_options = COALESCE($9, portion_options),
+           add_ons = COALESCE($10, add_ons)
+         WHERE id = $11`,
+        [
+          updates.name !== undefined ? updates.name : null,
+          updates.category !== undefined ? updates.category : null,
+          updates.description !== undefined ? updates.description : null,
+          updates.pricePaise !== undefined ? updates.pricePaise : null,
+          updates.isVeg !== undefined ? updates.isVeg : null,
+          updates.isAvailable !== undefined ? updates.isAvailable : null,
+          updates.spicyLevel !== undefined ? updates.spicyLevel : null,
+          updates.image !== undefined ? updates.image : null,
+          updates.portionOptions !== undefined ? JSON.stringify(updates.portionOptions) : null,
+          updates.addOns !== undefined ? JSON.stringify(updates.addOns) : null,
+          id,
+        ]
+      );
+    } catch (err) {
+      console.error('dbUpdateMenuItem error:', err);
+    }
+  }
+  return current;
+}
+
+export async function dbDeleteMenuItem(id: string): Promise<boolean> {
+  memoryMenuItems = memoryMenuItems.filter(m => m.id !== id);
+  if (pool && isConnected) {
+    try {
+      await pool.query('DELETE FROM menu_items WHERE id = $1', [id]);
+      return true;
+    } catch (err) {
+      console.error('dbDeleteMenuItem error:', err);
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function dbGetLoyaltyAccounts(): Promise<Record<string, CustomerLoyalty>> {
   if (pool && isConnected) {
     try {
@@ -409,4 +506,89 @@ export async function dbResetDemo(): Promise<void> {
     }
   }
 }
+
+export interface DbDiagnostics {
+  connected: boolean;
+  databaseType: 'PostgreSQL (Neon Cloud)' | 'In-Memory (Development)';
+  tableCounts: {
+    menu_items: number;
+    orders: number;
+    loyalty_accounts: number;
+    service_requests: number;
+  };
+  recentOrders: Array<{
+    id: string;
+    table_number: string;
+    customer_name: string;
+    customer_phone: string;
+    total_paise: number;
+    order_status: string;
+    payment_status: string;
+    created_at: string;
+  }>;
+  recentLoyalty: Array<{
+    phone: string;
+    stamps_count: number;
+    threshold: number;
+    reward_title: string;
+  }>;
+}
+
+export async function dbGetDiagnostics(): Promise<DbDiagnostics> {
+  if (pool && isConnected) {
+    try {
+      const [menuRes, orderRes, loyaltyRes, serviceRes, recentOrdersRes, loyaltyRows] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM menu_items'),
+        pool.query('SELECT COUNT(*) FROM orders'),
+        pool.query('SELECT COUNT(*) FROM loyalty_accounts'),
+        pool.query('SELECT COUNT(*) FROM service_requests'),
+        pool.query('SELECT id, table_number, customer_name, customer_phone, total_paise, order_status, payment_status, created_at FROM orders ORDER BY created_at DESC LIMIT 8'),
+        pool.query('SELECT phone, stamps_count, threshold, reward_title FROM loyalty_accounts LIMIT 8'),
+      ]);
+
+      return {
+        connected: true,
+        databaseType: 'PostgreSQL (Neon Cloud)',
+        tableCounts: {
+          menu_items: parseInt(menuRes.rows[0]?.count || '0', 10),
+          orders: parseInt(orderRes.rows[0]?.count || '0', 10),
+          loyalty_accounts: parseInt(loyaltyRes.rows[0]?.count || '0', 10),
+          service_requests: parseInt(serviceRes.rows[0]?.count || '0', 10),
+        },
+        recentOrders: recentOrdersRes.rows,
+        recentLoyalty: loyaltyRows.rows,
+      };
+    } catch (err) {
+      console.error('dbGetDiagnostics pool query error:', err);
+    }
+  }
+
+  return {
+    connected: false,
+    databaseType: 'In-Memory (Development)',
+    tableCounts: {
+      menu_items: memoryMenuItems.length,
+      orders: memoryOrders.length,
+      loyalty_accounts: Object.keys(memoryLoyaltyAccounts).length,
+      service_requests: memoryServiceRequests.length,
+    },
+    recentOrders: memoryOrders.slice(0, 8).map(o => ({
+      id: o.id,
+      table_number: o.tableNumber,
+      customer_name: o.customerName || 'Guest Diner',
+      customer_phone: o.customerPhone,
+      total_paise: o.totalPaise,
+      order_status: o.orderStatus,
+      payment_status: o.paymentStatus,
+      created_at: o.createdAt,
+    })),
+    recentLoyalty: Object.values(memoryLoyaltyAccounts).slice(0, 8).map(l => ({
+      phone: l.phone,
+      stamps_count: l.stampsCount,
+      threshold: l.threshold,
+      reward_title: l.rewardTitle,
+    })),
+  };
+}
+
 

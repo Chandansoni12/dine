@@ -20,7 +20,7 @@ import {
 export const WaiterView: React.FC = () => {
   const { orders, confirmOrder, rejectOrder, activeStaff, serviceRequests, resolveServiceRequest } = useRestaurant();
   const [rejectingOrder, setRejectingOrder] = useState<RestaurantOrder | null>(null);
-  const [rejectReason, setRejectReason] = useState('Table is empty / Phantom QR scan');
+  const [rejectReason, setRejectReason] = useState('Table is empty / Phantom order');
   const [customReason, setCustomReason] = useState('');
 
   // Pending orders waiting for waiter physical check
@@ -63,7 +63,7 @@ export const WaiterView: React.FC = () => {
             Mandatory Verification Protocol (Screen 9 Blueprint)
           </h4>
           <p className="text-xs text-amber-300/80 mt-0.5 leading-relaxed">
-            A QR code is not proof of physical presence. Verify the guest is physically seated at the table before confirming. Kitchen tickets only print upon waiter confirmation.
+            Verify the guest is physically seated at Table {activeStaff?.role === 'waiter' ? '' : ''}before confirming. Kitchen tickets only print upon floor confirmation.
           </p>
         </div>
       </div>
@@ -287,7 +287,7 @@ export const WaiterView: React.FC = () => {
 
             <div className="space-y-2">
               {[
-                'Table is empty / Phantom QR scan',
+                'Table is empty / Phantom order',
                 'Guest left the restaurant',
                 'Item temporarily out of stock',
                 'Kitchen is closed for orders',

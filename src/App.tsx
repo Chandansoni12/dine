@@ -8,7 +8,6 @@ import { CustomerOrderStatusModal } from './components/customer/CustomerOrderSta
 import { LoyaltyWalletModal } from './components/customer/LoyaltyWalletModal';
 import { CustomerReviewModal } from './components/customer/CustomerReviewModal';
 import { CustomerLoginModal } from './components/customer/CustomerLoginModal';
-import { TableQrStandeeModal } from './components/customer/TableQrStandeeModal';
 import { StaffLoginModal } from './components/staff/StaffLoginModal';
 import { StaffPortalContainer } from './components/staff/StaffPortalContainer';
 import { MobileBottomDock } from './components/customer/MobileBottomDock';
@@ -19,7 +18,6 @@ import {
   Award,
   Sparkles,
   Phone,
-  QrCode,
   CheckCircle,
   HelpCircle,
   ChevronDown,
@@ -46,7 +44,6 @@ const CustomerDineInApp: React.FC = () => {
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isStaffLoginOpen, setIsStaffLoginOpen] = useState(false);
-  const [isQrStandeeOpen, setIsQrStandeeOpen] = useState(false);
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [targetStaffRole, setTargetStaffRole] = useState<StaffRole>('waiter');
 
@@ -110,7 +107,6 @@ const CustomerDineInApp: React.FC = () => {
         onOpenOrderStatus={() => setIsOrderStatusOpen(true)}
         onOpenLogin={() => setIsLoginModalOpen(true)}
         onOpenReview={() => setIsReviewOpen(true)}
-        onOpenQrStandee={() => setIsQrStandeeOpen(true)}
       />
 
       {/* 2. Table Welcome Banner & Quick Dine-in Info */}
@@ -290,13 +286,6 @@ const CustomerDineInApp: React.FC = () => {
             </button>
             <span>·</span>
             <button
-              onClick={() => setIsQrStandeeOpen(true)}
-              className="hover:text-amber-700 transition-colors"
-            >
-              Table QR Standee
-            </button>
-            <span>·</span>
-            <button
               onClick={() => setIsLoginModalOpen(true)}
               className="hover:text-amber-700 transition-colors"
             >
@@ -367,11 +356,6 @@ const CustomerDineInApp: React.FC = () => {
       <CustomerReviewModal
         isOpen={isReviewOpen}
         onClose={() => setIsReviewOpen(false)}
-      />
-
-      <TableQrStandeeModal
-        isOpen={isQrStandeeOpen}
-        onClose={() => setIsQrStandeeOpen(false)}
       />
 
       <StaffLoginModal

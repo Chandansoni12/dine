@@ -122,6 +122,9 @@ interface RestaurantContextType {
 
   // Manager & Kitchen Inventory
   toggleMenuItemAvailability: (id: string, isAvailable: boolean) => Promise<void>;
+  addMenuItem: (item: Omit<MenuItem, 'id'>) => Promise<boolean>;
+  updateMenuItem: (id: string, updates: Partial<MenuItem>) => Promise<boolean>;
+  deleteMenuItem: (id: string) => Promise<boolean>;
 
   // Queries & Utilities
   getActiveOrderByTable: (table: string) => RestaurantOrder | undefined;
@@ -729,6 +732,47 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  // Admin adds new dish to menu
+  const addMenuItem = async (item: Omit<MenuItem, 'id'>): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/menu', {
+        method: 'POST',
+        headers: getStaffHeaders(),
+        body: JSON.stringify(item),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  // Admin updates existing dish
+  const updateMenuItem = async (id: string, updates: Partial<MenuItem>): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/menu/${id}`, {
+        method: 'PUT',
+        headers: getStaffHeaders(),
+        body: JSON.stringify(updates),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  // Admin deletes dish from menu
+  const deleteMenuItem = async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/menu/${id}`, {
+        method: 'DELETE',
+        headers: getStaffHeaders(),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const getActiveOrderByTable = (table: string): RestaurantOrder | undefined => {
     const formatted = table.padStart(2, '0');
     return orders.find(
@@ -813,6 +857,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         requestService,
         resolveServiceRequest,
         toggleMenuItemAvailability,
+        addMenuItem,
+        updateMenuItem,
+        deleteMenuItem,
         getActiveOrderByTable,
         getCustomerActiveOrder,
         getLoyaltyForPhone,

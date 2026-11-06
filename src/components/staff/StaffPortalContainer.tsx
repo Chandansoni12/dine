@@ -85,8 +85,8 @@ export const StaffPortalContainer: React.FC<StaffPortalContainerProps> = ({ init
             </div>
           </div>
 
-          {/* Center: Role Switcher Tabs */}
-          <nav className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+          {/* Center: Role Switcher Tabs (Mobile Horizontal Scrollable) */}
+          <nav className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold overflow-x-auto max-w-full scrollbar-none shrink-0">
             <button
               onClick={() => handleRoleChange('waiter')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
