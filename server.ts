@@ -238,7 +238,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     return res.status(429).json({ error: 'Order submission rate limit exceeded. Please wait a moment.' });
   }
 
-  const { tableNumber, customerPhone, customerName, items, notes } = req.body;
+  const { tableNumber, customerPhone, customerName, customerEmail, items, notes } = req.body;
 
   if (!tableNumber || !items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Missing required order details' });
@@ -308,6 +308,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
   const cleanTable = sanitizeText(String(tableNumber), 4).padStart(2, '0');
   const cleanPhone = sanitizeText(String(customerPhone || '+91 98201 12345'), 18);
   const cleanName = sanitizeText(String(customerName || 'Guest Diner'), 40);
+  const cleanEmail = sanitizeText(String(customerEmail || ''), 80);
   const cleanGeneralNotes = sanitizeText(notes || '', 180);
 
   const newOrder: RestaurantOrder = {
@@ -315,6 +316,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     tableNumber: cleanTable,
     customerPhone: cleanPhone,
     customerName: cleanName,
+    customerEmail: cleanEmail,
     items: validatedItems.map(item => ({
       ...item,
       notes: cleanGeneralNotes

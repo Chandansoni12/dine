@@ -79,7 +79,7 @@ interface RestaurantContextType {
   currentTable: string;
   setCurrentTable: (table: string) => void;
   customerSession: CustomerSession | null;
-  loginCustomer: (phone: string, name?: string, rememberDevice?: boolean) => void;
+  loginCustomer: (phone: string, name?: string, email?: string, rememberDevice?: boolean) => void;
   logoutCustomer: () => void;
 
   // Staff Authentication
@@ -385,10 +385,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const cartTotalPaise = cartSubtotalPaise + cartTaxPaise;
 
   // Customer Auth
-  const loginCustomer = (phone: string, name?: string, rememberDevice: boolean = true) => {
+  const loginCustomer = (phone: string, name?: string, email?: string, rememberDevice: boolean = true) => {
     const session: CustomerSession = {
       phone,
       name: name || 'Guest Diner',
+      email: email || '',
       rememberDevice,
       tableNumber: currentTable,
       sessionStartedAt: new Date().toISOString(),
@@ -454,6 +455,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           tableNumber: currentTable,
           customerPhone: customerSession.phone,
           customerName: customerSession.name,
+          customerEmail: customerSession.email,
           items: cartItems,
           notes: specialNotes,
         }),
@@ -475,6 +477,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       tableNumber: currentTable,
       customerPhone: customerSession.phone,
       customerName: customerSession.name,
+      customerEmail: customerSession.email,
       items: cartItems.map(item => ({
         ...item,
         notes: specialNotes ? `${item.notes ? item.notes + ' | ' : ''}${specialNotes}` : item.notes,

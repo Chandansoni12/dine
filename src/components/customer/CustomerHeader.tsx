@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { ShoppingBag, Award, Clock, Utensils, User, Star } from 'lucide-react';
+import { ShoppingBag, Award, Clock, Utensils, User, Star, ShieldCheck } from 'lucide-react';
 import { RESTAURANT_INFO } from '../../data/seedData';
 
 interface CustomerHeaderProps {
@@ -9,6 +9,7 @@ interface CustomerHeaderProps {
   onOpenOrderStatus: () => void;
   onOpenLogin: () => void;
   onOpenReview: () => void;
+  onOpenStaffLogin: () => void;
 }
 
 export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
@@ -17,6 +18,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
   onOpenOrderStatus,
   onOpenLogin,
   onOpenReview,
+  onOpenStaffLogin,
 }) => {
   const {
     currentTable,
@@ -136,6 +138,16 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
                 </span>
               </>
             )}
+          </button>
+
+          {/* Staff / Admin Quick Access Pill */}
+          <button
+            onClick={onOpenStaffLogin}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs"
+            title="Open Waiter Floor or Admin Studio"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-[11px]">Staff / Admin</span>
           </button>
 
           {/* Account Profile info or Switch */}

@@ -115,6 +115,8 @@ export async function initDatabase(): Promise<boolean> {
         requested_at TEXT NOT NULL,
         status TEXT NOT NULL
       );
+
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT;
     `);
 
     // Seed Menu Items if empty
@@ -195,6 +197,7 @@ export async function dbGetOrders(): Promise<RestaurantOrder[]> {
         tableNumber: r.table_number,
         customerPhone: r.customer_phone,
         customerName: r.customer_name,
+        customerEmail: r.customer_email || undefined,
         items: typeof r.items === 'string' ? JSON.parse(r.items) : r.items,
         subtotalPaise: r.subtotal_paise,
         taxPaise: r.tax_paise,
@@ -221,8 +224,8 @@ export async function dbSaveOrder(order: RestaurantOrder): Promise<void> {
   if (pool && isConnected) {
     try {
       await pool.query(
-        `INSERT INTO orders (id, table_number, customer_phone, customer_name, items, subtotal_paise, tax_paise, total_paise, order_status, payment_status, payment_method, created_at, waiter_action, kitchen_action, cashier_action, stamp_awarded, review)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        `INSERT INTO orders (id, table_number, customer_phone, customer_name, customer_email, items, subtotal_paise, tax_paise, total_paise, order_status, payment_status, payment_method, created_at, waiter_action, kitchen_action, cashier_action, stamp_awarded, review)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
          ON CONFLICT (id) DO UPDATE SET
            order_status = EXCLUDED.order_status,
            payment_status = EXCLUDED.payment_status,
@@ -237,6 +240,7 @@ export async function dbSaveOrder(order: RestaurantOrder): Promise<void> {
           order.tableNumber,
           order.customerPhone,
           order.customerName || 'Guest Diner',
+          order.customerEmail || '',
           JSON.stringify(order.items),
           order.subtotalPaise,
           order.taxPaise,

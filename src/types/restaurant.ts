@@ -71,6 +71,7 @@ export interface RestaurantOrder {
   tableNumber: string;    // e.g., "08"
   customerPhone: string;
   customerName?: string;
+  customerEmail?: string;
   items: OrderItem[];
   subtotalPaise: number;
   taxPaise: number;       // 5% GST
@@ -99,6 +100,8 @@ export interface LoyaltyEvent {
 
 export interface CustomerLoyalty {
   phone: string;
+  name?: string;
+  email?: string;
   stampsCount: number;
   threshold: number;
   rewardTitle: string;
@@ -108,6 +111,7 @@ export interface CustomerLoyalty {
 export interface CustomerSession {
   phone: string;
   name?: string;
+  email?: string;
   rememberDevice: boolean;
   tableNumber: string;
   sessionStartedAt: string;

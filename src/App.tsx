@@ -107,6 +107,7 @@ const CustomerDineInApp: React.FC = () => {
         onOpenOrderStatus={() => setIsOrderStatusOpen(true)}
         onOpenLogin={() => setIsLoginModalOpen(true)}
         onOpenReview={() => setIsReviewOpen(true)}
+        onOpenStaffLogin={() => setIsStaffLoginOpen(true)}
       />
 
       {/* 2. Table Welcome Banner & Quick Dine-in Info */}
@@ -187,6 +188,40 @@ const CustomerDineInApp: React.FC = () => {
           )}
         </div>
       </section>
+
+      {/* 2B. Direct Staff & Admin Switcher Banner (Prominent One-Click Access) */}
+      <div className="bg-slate-900 text-white px-4 py-2 border-b border-slate-800">
+        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-slate-300 text-[11px] font-medium">Looking for Waiter / Admin pages?</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setTargetStaffRole('waiter');
+                window.location.hash = '#waiter';
+                setIsStaffLoginOpen(true);
+              }}
+              className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+            >
+              <Bell className="w-3.5 h-3.5 text-amber-400" />
+              <span>Waiter Screen (PIN: 1111)</span>
+            </button>
+            <button
+              onClick={() => {
+                setTargetStaffRole('manager');
+                window.location.hash = '#admin';
+                setIsStaffLoginOpen(true);
+              }}
+              className="flex items-center gap-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-purple-400" />
+              <span>Admin Page (PIN: 4444)</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* 3. Customer Digital Menu */}
       <main className="flex-1">
@@ -333,6 +368,7 @@ const CustomerDineInApp: React.FC = () => {
       <CustomerLoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
+        onOpenStaff={() => setIsStaffLoginOpen(true)}
       />
 
       <CartDrawer
@@ -370,6 +406,7 @@ const CustomerDineInApp: React.FC = () => {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenOrderStatus={() => setIsOrderStatusOpen(true)}
         onOpenLoyalty={() => setIsLoyaltyOpen(true)}
+        onOpenStaff={() => setIsStaffLoginOpen(true)}
       />
     </div>
   );

@@ -19,12 +19,14 @@ interface MobileBottomDockProps {
   onOpenCart: () => void;
   onOpenOrderStatus: () => void;
   onOpenLoyalty: () => void;
+  onOpenStaff?: () => void;
 }
 
 export const MobileBottomDock: React.FC<MobileBottomDockProps> = ({
   onOpenCart,
   onOpenOrderStatus,
   onOpenLoyalty,
+  onOpenStaff,
 }) => {
   const {
     currentTable,
@@ -127,6 +129,21 @@ export const MobileBottomDock: React.FC<MobileBottomDockProps> = ({
                 <span className="text-xs font-bold text-emerald-950">Request Bill</span>
                 <span className="text-[10px] text-emerald-700">Cash / UPI / Card</span>
               </button>
+
+              {/* Employee Quick Switcher */}
+              {onOpenStaff && (
+                <button
+                  onClick={() => {
+                    setIsServiceSheetOpen(false);
+                    onOpenStaff();
+                  }}
+                  className="p-3 bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 rounded-2xl flex flex-col items-center justify-center text-center gap-0.5 transition-all active:scale-95 col-span-2 shadow-sm"
+                >
+                  <span className="text-base">🛡️</span>
+                  <span className="text-xs font-bold text-amber-300">Staff & Admin Operations</span>
+                  <span className="text-[10px] text-slate-400">Waiter Floor (1111) · Admin Studio (4444)</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
